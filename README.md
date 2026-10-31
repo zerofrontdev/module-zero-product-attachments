@@ -42,11 +42,15 @@ its content (an HTML page named .pdf is refused). Nothing a browser would
 run from the store's domain: no HTML, SVG or scripts.
 
 Stored under `pub/media/zero/attachments/<random>/<clean-name>`, served as
-media. Removing an attachment removes its file; deleting the product removes
-its attachments' rows. Adding, changing or removing a file cleans the
+media. The store view and the file are checked before anything is copied;
+if the row can't be written after the copy, the copied file is removed.
+Removing an attachment removes its file; deleting the product removes its
+attachments' rows. Adding, changing or removing a file cleans the
 product's page from the page cache (built-in or Varnish).
 
 Table: `zero_product_attachment`.
+
+What changed in each release: [CHANGELOG.md](CHANGELOG.md).
 
 ## License
 

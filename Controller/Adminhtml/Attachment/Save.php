@@ -10,6 +10,7 @@ namespace Zero\ProductAttachments\Controller\Adminhtml\Attachment;
 use Magento\Backend\App\Action;
 use Magento\Backend\App\Action\Context;
 use Magento\Framework\App\Action\HttpPostActionInterface;
+use Magento\Framework\Exception\LocalizedException;
 use Zero\ProductAttachments\Model\Attachments;
 
 /**
@@ -26,13 +27,17 @@ class Save extends Action implements HttpPostActionInterface
 
     public function execute()
     {
-        $this->attachments->update(
-            (int) $this->getRequest()->getParam('id'),
-            (string) $this->getRequest()->getParam('title'),
-            (int) $this->getRequest()->getParam('store'),
-            (int) $this->getRequest()->getParam('sort_order')
-        );
-        $this->messageManager->addSuccessMessage(__('Saved.'));
+        try {
+            $this->attachments->update(
+                (int) $this->getRequest()->getParam('id'),
+                (string) $this->getRequest()->getParam('title'),
+                (int) $this->getRequest()->getParam('store'),
+                (int) $this->getRequest()->getParam('sort_order')
+            );
+            $this->messageManager->addSuccessMessage(__('Saved.'));
+        } catch (LocalizedException $e) {
+            $this->messageManager->addErrorMessage($e->getMessage());
+        }
         $sku = trim((string) $this->getRequest()->getParam('sku'));
         return $this->resultRedirectFactory->create()->setPath('*/*/index', $sku !== '' ? ['sku' => $sku] : []);
     }

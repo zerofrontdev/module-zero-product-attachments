@@ -14,7 +14,9 @@ use Magento\Framework\App\ResourceConnection;
 use Magento\Framework\DataObject\IdentityInterface;
 use Magento\Framework\Event\ManagerInterface as EventManager;
 use Magento\Framework\Exception\LocalizedException;
+use Magento\Framework\Exception\NoSuchEntityException;
 use Magento\Framework\Filesystem;
+use Magento\Store\Model\StoreManagerInterface;
 
 /**
  * Product attachments: the rows and their files under
@@ -32,7 +34,8 @@ class Attachments
         private readonly FileTypes $fileTypes,
         private readonly Config $config,
         private readonly CacheInterface $cache,
-        private readonly EventManager $eventManager
+        private readonly EventManager $eventManager,
+        private readonly StoreManagerInterface $storeManager
     ) {
     }
 
@@ -84,12 +87,14 @@ class Attachments
     }
 
     /**
-     * Attaches an uploaded file (a PHP temporary file).
+     * Attaches an uploaded file (a PHP temporary file). Everything is checked
+     * before the file is copied; if the row can't be written, the copy goes.
      *
      * @throws LocalizedException
      */
     public function add(int $productId, int $storeId, string $title, int $sortOrder, string $tmpFile, string $fileName): int
     {
+        $this->assertStore($storeId);
         $fileName = $this->cleanName($fileName);
         if (!is_uploaded_file($tmpFile) && !is_file($tmpFile)) {
             throw new LocalizedException(__('The file didn\'t arrive. Is it larger than the server allows?'));
@@ -111,21 +116,32 @@ class Attachments
         $media->create(dirname($relative));
         $media->getDriver()->copy($tmpFile, $media->getAbsolutePath($relative));
         $connection = $this->resource->getConnection();
-        $connection->insert($this->resource->getTableName(self::TABLE), [
-            'product_id' => $productId,
-            'store_id' => $storeId,
-            'title' => mb_substr(trim($title) !== '' ? trim($title) : pathinfo($fileName, PATHINFO_FILENAME), 0, 255),
-            'file' => $relative,
-            'file_name' => $fileName,
-            'size' => $size,
-            'sort_order' => $sortOrder,
-        ]);
+        try {
+            $connection->insert($this->resource->getTableName(self::TABLE), [
+                'product_id' => $productId,
+                'store_id' => $storeId,
+                'title' => mb_substr(trim($title) !== '' ? trim($title) : pathinfo($fileName, PATHINFO_FILENAME), 0, 255),
+                'file' => $relative,
+                'file_name' => $fileName,
+                'size' => $size,
+                'sort_order' => $sortOrder,
+            ]);
+            $id = (int) $connection->lastInsertId($this->resource->getTableName(self::TABLE));
+        } catch (\Throwable $e) {
+            // No file without its row (an unknown product, say).
+            $media->delete(dirname($relative));
+            throw new LocalizedException(__('The attachment was not saved: %1', $e->getMessage()), $e);
+        }
         $this->clean($productId);
-        return (int) $connection->lastInsertId($this->resource->getTableName(self::TABLE));
+        return $id;
     }
 
+    /**
+     * @throws LocalizedException
+     */
     public function update(int $attachmentId, string $title, int $storeId, int $sortOrder): void
     {
+        $this->assertStore($storeId);
         $row = $this->get($attachmentId);
         if (!$row) {
             return;
@@ -160,6 +176,23 @@ class Attachments
             $connection->select()->from($this->resource->getTableName(self::TABLE))->where('attachment_id = ?', $attachmentId)
         );
         return $row ?: null;
+    }
+
+    /**
+     * All Store Views (0) or a store view that exists.
+     *
+     * @throws LocalizedException
+     */
+    private function assertStore(int $storeId): void
+    {
+        if ($storeId === 0) {
+            return;
+        }
+        try {
+            $this->storeManager->getStore($storeId);
+        } catch (NoSuchEntityException) {
+            throw new LocalizedException(__('This store view doesn\'t exist.'));
+        }
     }
 
     /** A name safe in a URL and on any disk: "Manual (EN) v2.pdf" => "manual-en-v2.pdf". */
