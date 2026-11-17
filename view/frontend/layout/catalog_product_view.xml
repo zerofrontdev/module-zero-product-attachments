@@ -12,7 +12,7 @@
                    template="Zero_ProductAttachments::downloads.phtml" group="detailed_info"
                    ifconfig="zero_attachments/general/enabled">
                 <arguments>
-                    <argument name="title" xsi:type="helper" helper="Zero\ProductAttachments\Helper\Title::get"/>
+                    <argument name="title" xsi:type="helper" helper="Zero\ProductAttachments\Model\Config::title"/>
                     <argument name="sort_order" xsi:type="string">40</argument>
                     <argument name="downloads" xsi:type="object">Zero\ProductAttachments\ViewModel\Downloads</argument>
                 </arguments>
